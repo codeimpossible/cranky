@@ -43,8 +43,12 @@ internal class Analyzer(IReadOnlyCollection<FileSystemInfo> projectFiles, IOutpu
                 {
                     pct = (int)((1.0 - ((double)result.UndocumentedMembers.Count / result.PublicMembers.Count)) * 100);
                 }
-                perFilePercentages.Add(key, pct);
 
+                if (!perFilePercentages.TryAdd(key, pct))
+                {
+                    perFilePercentages[key] = pct;
+                }
+                
                 total += result.PublicMembers.Count;
                 undocumented += result.UndocumentedMembers.Count;
             }
