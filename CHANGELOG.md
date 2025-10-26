@@ -1,3 +1,9 @@
+1.6.0
+-----
+
+* Only `public` types are checked for documentation coverage
+* The GitHub Action summary includes a per-file coverage breakdown, to help identify files that need improvement
+
 1.5.1
 -----
 

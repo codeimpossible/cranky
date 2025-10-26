@@ -17,6 +17,7 @@ internal class Analyzer(IReadOnlyCollection<FileSystemInfo> projectFiles, IOutpu
         var total = 0;
         var undocumented = 0;
 
+        Dictionary<string, int> perFilePercentages = new();
         foreach (var projectFile in projectFiles)
         {
             var projectFilePath = projectFile.FullName.Replace("\\", "/").Replace("/", Path.DirectorySeparatorChar.ToString());
@@ -36,6 +37,13 @@ internal class Analyzer(IReadOnlyCollection<FileSystemInfo> projectFiles, IOutpu
                 }
 
                 var result = await AnalyzeFileAsync(sourceFile, cancellationToken);
+                var key = Path.GetRelativePath(Directory.GetCurrentDirectory(), sourceFile.FullName);
+                var pct = 100;
+                if (result.UndocumentedMembers.Count > 0)
+                {
+                    pct = (int)((1.0 - ((double)result.UndocumentedMembers.Count / result.PublicMembers.Count)) * 100);
+                }
+                perFilePercentages.Add(key, pct);
 
                 total += result.PublicMembers.Count;
                 undocumented += result.UndocumentedMembers.Count;
@@ -52,7 +60,11 @@ internal class Analyzer(IReadOnlyCollection<FileSystemInfo> projectFiles, IOutpu
         if (totalProjects != reportedProjects)
             output.SetProgress(totalProjects, totalProjects);
 
-        return new(total, undocumented);
+        var outputResult = new AnalyzerResult(total, undocumented)
+        {
+            PerFilePercentage = perFilePercentages
+        };
+        return outputResult;
     }
 
     private IEnumerable<FileSystemInfo> GetSourceFiles(string projectFilePath, CancellationToken cancellationToken = default)
@@ -87,16 +99,32 @@ internal class Analyzer(IReadOnlyCollection<FileSystemInfo> projectFiles, IOutpu
         var tree = CSharpSyntaxTree.ParseText(text, cancellationToken: cancellationToken);
         var root = tree.GetCompilationUnitRoot(cancellationToken);
 
-        // 2. get public api
-        var publicMembers = root.DescendantNodes()
-            .OfType<MemberDeclarationSyntax>()
-            .Where(m => m.Modifiers.Any(SyntaxKind.PublicKeyword) || m.Modifiers.Any(SyntaxKind.ProtectedKeyword))
-            .ToList();
+        var publicMembers = new List<MemberDeclarationSyntax>();
+        var publicMembersWithoutDocumentation = new List<MemberDeclarationSyntax>();
 
-        // 3. get api documentation
-        var publicMembersWithoutDocumentation = publicMembers
-            .Where(m => !m.HasLeadingTrivia|| !m.GetLeadingTrivia().Any(t => t.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia)))
-            .ToList();
+        var publicRoots = root.DescendantNodes()
+            .OfType<TypeDeclarationSyntax>()
+            .Where(tds => tds.Modifiers.Any(m => m.IsKind(SyntaxKind.PublicKeyword)));
+        foreach (var publicRoot in publicRoots)
+        {
+            output.WriteDebug($"  Analyzing public type: {publicRoot.Identifier.Text}");
+            // 2. get public api
+            var detectedPublicMembers = publicRoot.DescendantNodes()
+                .OfType<MemberDeclarationSyntax>()
+                .Where(m => m.Modifiers.Any(SyntaxKind.PublicKeyword) || m.Modifiers.Any(SyntaxKind.ProtectedKeyword))
+                .ToList();
+
+            // 3. get api documentation
+            var detectedPublicMembersWithoutDocumentation = detectedPublicMembers
+                .Where(m => !m.HasLeadingTrivia|| !m.GetLeadingTrivia().Any(t => t.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia)))
+                .ToList();
+
+            publicMembers.AddRange(detectedPublicMembers);
+            publicMembersWithoutDocumentation.AddRange(detectedPublicMembersWithoutDocumentation);
+
+            output.WriteDebug($"  Total API Members: {detectedPublicMembers.Count}");
+            output.WriteDebug($"  Undocumented Members: {detectedPublicMembersWithoutDocumentation.Count}");
+        }
 
         return new(publicMembers, publicMembersWithoutDocumentation);
     }

@@ -33,6 +33,7 @@ public record AnalyzeCommandResult(AnalyzerResult AnalyzerResult, HealthIndicato
             { "documented", AnalyzerResult.Documented },
             { "undocumented", AnalyzerResult.Undocumented },
             { "percent", AnalyzerResult.DocumentedPercentageDisplay },
+            { "fileMap", AnalyzerResult.PerFilePercentage },
             { "health", HealthEmoji },
             { "message", Message },
             { "badge", Badge },

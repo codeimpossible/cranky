@@ -96,6 +96,8 @@ public class GithubActionsOutput : IOutput
                        ![Documentation coverage {result.AnalyzerResult.DocumentedPercentageDisplay}%]({result.Badge})
                        
                        {result.Message}
+                       
+                       {CreateFileBreakdownTable(result.AnalyzerResult)}
                        """;
 
         Environment.SetEnvironmentVariable("GITHUB_STEP_SUMMARY", summary);
@@ -115,6 +117,22 @@ public class GithubActionsOutput : IOutput
     {
         // GitHub Actions does not support progress reporting
         // To not spam the log, we ignore this
+    }
+
+    private string CreateFileBreakdownTable(AnalyzerResult result)
+    {
+        var builder = new StringBuilder();
+
+        builder.AppendLine($"| File Name | Coverage Percent |");
+        builder.AppendLine($"|-----------|------------------|");
+        foreach (var entry in result.PerFilePercentage)
+        {
+            builder.AppendLine($"| {entry.Key.Replace("\\", "/")} | {entry.Value}% |");
+        }
+
+        builder.AppendLine($"");
+
+        return builder.ToString();
     }
 
     public void Dispose()
